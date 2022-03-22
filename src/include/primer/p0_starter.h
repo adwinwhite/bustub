@@ -35,7 +35,14 @@ class Matrix {
    * @param cols The number of columns
    *
    */
-  Matrix(int rows, int cols) {}
+  Matrix(int rows, int cols) {
+    if (rows <= 0 || cols <= 0) {
+      throw Exception(ExceptionType::INVALID, "non positive dimension");
+    }
+    rows_ = rows;
+    cols_ = cols;
+    linear_ = new T[static_cast<uint64_t>(rows * cols)];
+  }
 
   /** The number of rows in the matrix */
   int rows_;
@@ -95,7 +102,7 @@ class Matrix {
    * Destroy a matrix instance.
    * TODO(P0): Add implementation
    */
-  virtual ~Matrix() = default;
+  virtual ~Matrix() { delete linear_; }
 };
 
 /**
@@ -112,19 +119,24 @@ class RowMatrix : public Matrix<T> {
    * @param rows The number of rows
    * @param cols The number of columns
    */
-  RowMatrix(int rows, int cols) : Matrix<T>(rows, cols) {}
+  RowMatrix(int rows, int cols) : Matrix<T>(rows, cols) {
+    data_ = reinterpret_cast<T **>(new T[rows]);
+    for (int i = 0; i < rows; i++) {
+      data_[i] = &RowMatrix::linear_[i * cols];
+    }
+  }
 
   /**
    * TODO(P0): Add implementation
    * @return The number of rows in the matrix
    */
-  int GetRowCount() const override { return 0; }
+  int GetRowCount() const override { return RowMatrix::rows_; }
 
   /**
    * TODO(P0): Add implementation
    * @return The number of columns in the matrix
    */
-  int GetColumnCount() const override { return 0; }
+  int GetColumnCount() const override { return RowMatrix::cols_; }
 
   /**
    * TODO(P0): Add implementation
@@ -139,7 +151,10 @@ class RowMatrix : public Matrix<T> {
    * @throws OUT_OF_RANGE if either index is out of range
    */
   T GetElement(int i, int j) const override {
-    throw NotImplementedException{"RowMatrix::GetElement() not implemented."};
+    if (i < 0 || i >= GetRowCount() || j < 0 || j >= GetColumnCount()) {
+      throw Exception(ExceptionType::OUT_OF_RANGE, "in GetElement(i, j)");
+    }
+    return data_[i][j];
   }
 
   /**
@@ -152,7 +167,12 @@ class RowMatrix : public Matrix<T> {
    * @param val The value to insert
    * @throws OUT_OF_RANGE if either index is out of range
    */
-  void SetElement(int i, int j, T val) override {}
+  void SetElement(int i, int j, T val) override {
+    if (i < 0 || i >= GetRowCount() || j < 0 || j >= GetColumnCount()) {
+      throw Exception(ExceptionType::OUT_OF_RANGE, "in SetElement(i, j)");
+    }
+    data_[i][j] = val;
+  }
 
   /**
    * TODO(P0): Add implementation
@@ -166,7 +186,16 @@ class RowMatrix : public Matrix<T> {
    * @throws OUT_OF_RANGE if `source` is incorrect size
    */
   void FillFrom(const std::vector<T> &source) override {
-    throw NotImplementedException{"RowMatrix::FillFrom() not implemented."};
+    if (source.size() != static_cast<uint64_t>(GetRowCount() * GetColumnCount())) {
+      throw Exception(ExceptionType::OUT_OF_RANGE, "in FillFrom(vector)");
+    }
+    auto it = source.begin();
+    for (int i = 0; i < GetRowCount(); i++) {
+      for (int j = 0; j < GetColumnCount(); j++) {
+        data_[i][j] = *it;
+        ++it;
+      }
+    }
   }
 
   /**
@@ -174,7 +203,7 @@ class RowMatrix : public Matrix<T> {
    *
    * Destroy a RowMatrix instance.
    */
-  ~RowMatrix() override = default;
+  ~RowMatrix() override { delete data_; }
 
  private:
   /**
@@ -204,7 +233,20 @@ class RowMatrixOperations {
    */
   static std::unique_ptr<RowMatrix<T>> Add(const RowMatrix<T> *matrixA, const RowMatrix<T> *matrixB) {
     // TODO(P0): Add implementation
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+    // Check shape
+    if (matrixA->GetRowCount() != matrixB->GetRowCount() || matrixA->GetColumnCount() != matrixB->GetColumnCount()) {
+      return std::unique_ptr<RowMatrix<T>>(nullptr);
+    }
+
+    // So much overhead for boundaries checks. Will it be optimized away by compiler?
+    auto matrix_c = new RowMatrix<T>(matrixA->GetRowCount(), matrixA->GetColumnCount());
+    for (int i = 0; i < matrix_c->GetRowCount(); i++) {
+      for (int j = 0; j < matrix_c->GetColumnCount(); j++) {
+        matrix_c->SetElement(i, j, matrixA->GetElement(i, j) + matrixB->GetElement(i, j));
+      }
+    }
+
+    return std::unique_ptr<RowMatrix<T>>(matrix_c);
   }
 
   /**
@@ -216,7 +258,24 @@ class RowMatrixOperations {
    */
   static std::unique_ptr<RowMatrix<T>> Multiply(const RowMatrix<T> *matrixA, const RowMatrix<T> *matrixB) {
     // TODO(P0): Add implementation
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+    // Check shape
+    if (matrixA->GetColumnCount() != matrixB->GetRowCount()) {
+      return std::unique_ptr<RowMatrix<T>>(nullptr);
+    }
+
+    // So much overhead for boundaries checks. Will it be optimized away by compiler?
+    auto matrix_c = new RowMatrix<T>(matrixA->GetRowCount(), matrixB->GetColumnCount());
+    for (int i = 0; i < matrixA->GetRowCount(); i++) {
+      for (int j = 0; j < matrixB->GetColumnCount(); j++) {
+        T entry = matrixA->GetElement(i, 0) * matrixB->GetElement(0, j);
+        for (int k = 1; k < matrixA->GetColumnCount(); k++) {
+          entry += matrixA->GetElement(i, k) * matrixB->GetElement(k, j);
+        }
+        matrix_c->SetElement(i, j, entry);
+      }
+    }
+
+    return std::unique_ptr<RowMatrix<T>>(matrix_c);
   }
 
   /**
@@ -230,7 +289,13 @@ class RowMatrixOperations {
   static std::unique_ptr<RowMatrix<T>> GEMM(const RowMatrix<T> *matrixA, const RowMatrix<T> *matrixB,
                                             const RowMatrix<T> *matrixC) {
     // TODO(P0): Add implementation
-    return std::unique_ptr<RowMatrix<T>>(nullptr);
+    auto product = Multiply(matrixA, matrixB);
+    if (product.get() == nullptr) {
+      return std::unique_ptr<RowMatrix<T>>(nullptr);
+    }
+    auto sum = Add(product.get(), matrixC);
+    delete product.release();
+    return sum;
   }
 };
 }  // namespace bustub
