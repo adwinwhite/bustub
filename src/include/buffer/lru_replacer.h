@@ -22,7 +22,7 @@
 namespace bustub {
 
 /**
- * LRUReplacer implements the Least Recently Used replacement policy.
+ * LRUReplacer implements the Least Recently unpinned replacement policy.
  */
 class LRUReplacer : public Replacer {
  public:
@@ -47,6 +47,8 @@ class LRUReplacer : public Replacer {
 
  private:
   // TODO(student): implement me!
+  std::mutex unpinned_list_mutex_;
+  std::list<frame_id_t> unpinned_list_;
 };
 
 }  // namespace bustub
