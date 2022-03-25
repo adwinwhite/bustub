@@ -14,6 +14,7 @@
 
 #include "common/macros.h"
 
+
 namespace bustub {
 
 BufferPoolManagerInstance::BufferPoolManagerInstance(size_t pool_size, DiskManager *disk_manager,
@@ -81,15 +82,21 @@ Page *BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) {
     if (!replacer_->Victim(&free_frame_id)) {
       return nullptr;
     }
+    // Save victim's data to disk if needed
+    if ((pages_ + free_frame_id)->IsDirty()) {
+      FlushPgImp((pages_ + free_frame_id)->GetPageId());
+    }
+    page_table_.erase((pages_ + free_frame_id)->GetPageId());
   } else {
     free_frame_id = free_list_.front();
     free_list_.pop_front();
   }
   *page_id = AllocatePage();
   (pages_ + free_frame_id)->is_dirty_ = false;
-  (pages_ + free_frame_id)->pin_count_ = 0;
+  (pages_ + free_frame_id)->pin_count_ = 1;
   (pages_ + free_frame_id)->page_id_ = *page_id;
   (pages_ + free_frame_id)->ResetMemory();
+  page_table_.insert({*page_id, free_frame_id});
   return pages_ + free_frame_id;
 }
 
@@ -117,18 +124,19 @@ Page *BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) {
     if (!replacer_->Victim(&free_frame_id)) {
       return nullptr;
     }
-  }
-  if ((pages_ + free_frame_id)->IsDirty()) {
-    FlushPage((pages_ + free_frame_id)->GetPageId());
+    if ((pages_ + free_frame_id)->IsDirty()) {
+      FlushPgImp((pages_ + free_frame_id)->GetPageId());
+    }
+    page_table_.erase((pages_ + free_frame_id)->GetPageId());
   }
   page_table_.erase((pages_ + free_frame_id)->GetPageId());
   page_table_.insert({page_id, free_frame_id});
   (pages_ + free_frame_id)->is_dirty_ = false;
-  (pages_ + free_frame_id)->pin_count_ = 0;
+  (pages_ + free_frame_id)->pin_count_ = 1;
   (pages_ + free_frame_id)->page_id_ = page_id;
-  disk_manager_->ReadPage(page_id, (pages_ + free_frame_id)->data_);
+  disk_manager_->ReadPage(page_id, (pages_ + free_frame_id)->GetData());
 
-  (pages_ + free_frame_id)->pin_count_++;
+
   replacer_->Pin(page_id);
   return pages_ + free_frame_id;
 }
@@ -159,7 +167,7 @@ bool BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) {
 
 bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) {
   auto frame_id = page_table_[page_id];
-  if ((pages_ + frame_id)->pin_count_ <= 0) {
+  if ((pages_ + frame_id)->GetPinCount() <= 0) {
     return false;
   }
 
