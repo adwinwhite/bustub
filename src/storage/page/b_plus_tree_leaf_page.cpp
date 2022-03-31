@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <sstream>
+#include <cmath>
 
 #include "common/exception.h"
 #include "common/rid.h"
@@ -27,23 +28,60 @@ namespace bustub {
  * next page id and set max size
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id, int max_size) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Init(page_id_t page_id, page_id_t parent_id, int max_size) {
+  SetPageType(IndexPageType::LEAF_PAGE);
+  SetSize(0);
+  SetMaxSize(max_size);
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  SetNextPageId(INVALID_PAGE_ID);
+}
 
 /**
  * Helper methods to set/get next page id
  */
 INDEX_TEMPLATE_ARGUMENTS
-page_id_t B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const { return INVALID_PAGE_ID; }
+page_id_t B_PLUS_TREE_LEAF_PAGE_TYPE::GetNextPageId() const {
+  return next_page_id_;
+}
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
+  next_page_id_ = next_page_id;
+}
 
 /**
- * Helper method to find the first index i so that array[i].first >= key
+ * Helper method to find the first index i so that array[i].first > key
  * NOTE: This method is only used when generating index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const { return 0; }
+int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator &comparator) const {
+  if (GetSize() == 0) {
+    return 0;
+  }
+  if (comparator(array_[0].first, key) == 1) {
+    return 0;
+  }
+  int left = 1;
+  int right = GetSize();
+  int middle = static_cast<int>(floor((left + right) / 2));
+  while (!(comparator(array_[middle].first, key) == 1 && comparator(array_[middle - 1].first, key) != 1)) {
+    if (comparator(array_[middle].first, key) == 1) {
+      right = middle;
+      middle = static_cast<int>(floor((left + right) / 2));
+    } else {
+      if (middle == left && right - left == 1) {
+        right++;
+      }
+      left = middle + 1;
+      middle = static_cast<int>(floor((left + right) / 2));
+      if (middle == GetSize()) {
+        return middle;
+      }
+    }
+  }
+  return middle;
+}
 
 /*
  * Helper method to find and return the key associated with input "index"(a.k.a
@@ -52,8 +90,7 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator
 INDEX_TEMPLATE_ARGUMENTS
 KeyType B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const {
   // replace with your own code
-  KeyType key{};
-  return key;
+  return array_[index].first;
 }
 
 /*
@@ -63,7 +100,7 @@ KeyType B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const {
 INDEX_TEMPLATE_ARGUMENTS
 const MappingType &B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) {
   // replace with your own code
-  return array_[0];
+  return array_[index];
 }
 
 /*****************************************************************************
@@ -75,7 +112,21 @@ const MappingType &B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) {
-  return 0;
+  // Assume there is enough space
+  int index;
+  if (GetSize() == 0) {
+    index = 0;
+  } else {
+    index = KeyIndex(key, comparator);
+    for (auto i = GetSize(); i > index; i--) {
+      array_[i].first = array_[i - 1].first;
+      array_[i].second = array_[i - 1].second;
+    }
+  }
+  array_[index].first = key;
+  array_[index].second = value;
+  IncreaseSize(1);
+  return GetSize();
 }
 
 /*****************************************************************************
@@ -85,7 +136,17 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
  * Remove half of key & value pairs from this page to "recipient" page
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
+  // Assume recipient is empty
+  auto middle_index = (GetSize() + 1) / 2;
+  for (auto i = middle_index; i < GetSize(); i++) {
+    recipient->array_[i - middle_index].first = array_[i].first;
+    recipient->array_[i - middle_index].second = array_[i].second;
+  }
+  // Update size
+  recipient->SetSize(GetSize() - middle_index);
+  SetSize(middle_index);
+}
 
 /*
  * Copy starting from items, and copy {size} number of elements into me.
@@ -103,6 +164,14 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {}
  */
 INDEX_TEMPLATE_ARGUMENTS
 bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, const KeyComparator &comparator) const {
+  auto index = KeyIndex(key, comparator);
+  if (index == 0) {
+    return false;
+  }
+  if (comparator(key, array_[index - 1].first) == 0) {
+    *value = array_[index - 1].second;
+    return true;
+  }
   return false;
 }
 
@@ -116,7 +185,23 @@ bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, co
  * @return   page size after deletion
  */
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) { return 0; }
+int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) {
+  auto index = KeyIndex(key, comparator);
+  if (index == GetSize() || index == 1) {
+    return GetSize();
+  }
+
+  if (comparator(key, array_[index - 1].first) == 0) {
+    for (auto i = index - 1; i < GetSize() - 1; i++) {
+      array_[i].first = array_[i + 1].first;
+      array_[i].second = array_[i + 1].second;
+    }
+    // Update size
+    IncreaseSize(-1);
+  }
+  return GetSize();
+}
+
 
 /*****************************************************************************
  * MERGE

@@ -37,8 +37,8 @@ std::string UsageMessage() {
   return message;
 }
 
-// Remove 'DISABLED_' when you are ready
-TEST(BptTreeTest, DISABLED_UnitTest) {
+// Remove '' when you are ready
+TEST(BptTreeTest, UnitTest) {
   int64_t key = 0;
   GenericKey<8> index_key;
   RID rid;
