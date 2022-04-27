@@ -187,7 +187,7 @@ bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType *value, co
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) {
   auto index = KeyIndex(key, comparator);
-  if (index == GetSize() || index == 1) {
+  if (index == 0) {
     return GetSize();
   }
 
