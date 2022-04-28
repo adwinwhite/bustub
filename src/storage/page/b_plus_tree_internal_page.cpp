@@ -225,7 +225,33 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::RemoveAndReturnOnlyChild() {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
-                                               BufferPoolManager *buffer_pool_manager) {}
+                                               BufferPoolManager *buffer_pool_manager) {
+  // Weird! How to determine direction without comparator
+  // Use middle_key?
+  // Just append data only.
+
+  // Assume everything is safe
+  // recipient <- me
+  // use middle key as the front key of me
+  array_[0].first = middle_key;
+  // Directly copy no need to make room
+  for (int i = 0; i < GetSize(); i++) {
+    recipient->array_[i + recipient->GetSize()].first = array_[i].first;
+    recipient->array_[i + recipient->GetSize()].second = array_[i].second;
+    
+    // Update parent page id for pages involved
+    auto page = buffer_pool_manager->FetchPage(array_[i].second);
+    page->WLatch();
+    auto node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+    node->SetParentPageId(recipient->GetPageId());
+    page->WUnlatch();
+    buffer_pool_manager->UnpinPage(array_[i].second, true);
+  }
+
+  // Update size for both
+  recipient->IncreaseSize(GetSize());
+  IncreaseSize(-GetSize());
+}
 
 /*****************************************************************************
  * REDISTRIBUTE
@@ -240,7 +266,33 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
-                                                      BufferPoolManager *buffer_pool_manager) {}
+                                                      BufferPoolManager *buffer_pool_manager) {
+  // Assume everything is safe
+  // recipient <- me
+  // Let the front of mine be middle key
+  array_[0].first = middle_key;
+  // First copy the front of mine to the last of recipient
+  recipient->array_[recipient->GetSize()].first = array_[0].first;
+  recipient->array_[recipient->GetSize()].second = array_[0].second;
+
+  // Update parent page id for pages involved
+  auto page = buffer_pool_manager->FetchPage(array_[0].second);
+  page->WLatch();
+  auto node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  node->SetParentPageId(recipient->GetPageId());
+  page->WUnlatch();
+  buffer_pool_manager->UnpinPage(array_[0].second, true);
+
+  // Shift one slot left myself
+  for (int i = 0; i < GetSize() - 1; i++) {
+    array_[i].first = array_[i + 1].first;
+    array_[i].second = array_[i + 1].second;
+  }
+
+  // Update size of both 
+  recipient->IncreaseSize(1);
+  IncreaseSize(-1);
+}
 
 /* Append an entry at the end.
  * Since it is an internal page, the moved entry(page)'s parent needs to be updated.
@@ -261,6 +313,31 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *re
                                                        BufferPoolManager *buffer_pool_manager) {
   // Whose middle_key this is?
   // And what if there isn't enough space? Split or always assume it's safe?
+  // Assume everything is safe
+  // Make room for the front in recipient
+  // Fill key at 0 with middle_key
+  recipient->array_[0].first = middle_key;
+  for (auto i = recipient->GetSize(); i > 0; i--) {
+    recipient->array_[i].first = recipient->array_[i-1].first;
+    recipient->array_[i].second = recipient->array_[i-1].second;
+  }
+
+  // Move the last of mine to the front of recipient
+  recipient->array_[0].first = array_[GetSize() - 1].first;
+  recipient->array_[0].second = array_[GetSize() - 1].second;
+
+  // Update parent page id for pages involved
+  auto page = buffer_pool_manager->FetchPage(array_[GetSize() - 1].second);
+  page->WLatch();
+  auto node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  node->SetParentPageId(recipient->GetPageId());
+  page->WUnlatch();
+  buffer_pool_manager->UnpinPage(array_[GetSize() - 1].second, true);
+
+  // Update size of both pages
+  recipient->IncreaseSize(1);
+  IncreaseSize(-1);
+
 }
 
 /* Append an entry at the beginning.

@@ -246,6 +246,17 @@ class Transaction {
    */
   inline void SetPrevLSN(lsn_t prev_lsn) { prev_lsn_ = prev_lsn; }
 
+  bool WUnlatchPage(page_id_t page_id) {
+    for (auto p = page_set_->begin(); p != page_set_->end(); p++) {
+      if ((*p)->GetPageId() == page_id) {
+        (*p)->WUnlatch();
+        page_set_->erase(p);
+        return true;
+      }
+    }
+    return false;
+  }
+
  private:
   /** The current transaction state. */
   TransactionState state_;
@@ -272,6 +283,7 @@ class Transaction {
   std::shared_ptr<std::unordered_set<RID>> shared_lock_set_;
   /** LockManager: the set of exclusive-locked tuples held by this transaction. */
   std::shared_ptr<std::unordered_set<RID>> exclusive_lock_set_;
+
 };
 
 }  // namespace bustub

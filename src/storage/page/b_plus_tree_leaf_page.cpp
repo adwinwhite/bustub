@@ -211,7 +211,27 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const 
  * to update the next_page id in the sibling page
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
+  // Weird! How to determine direction without comparator
+  // Use NextPageId?
+  // NNN, just only append data
+
+  // Assume everything is safe
+  // recipient <- me
+  // Directly copy no need to make room
+  for (int i = 0; i < GetSize(); i++) {
+    recipient->array_[i + recipient->GetSize()].first = array_[0].first;
+    recipient->array_[i + recipient->GetSize()].second = array_[0].second;
+  }
+
+  // Update size for both
+  recipient->IncreaseSize(GetSize());
+  IncreaseSize(-GetSize());
+
+  // Update next page id
+  recipient->SetNextPageId(GetNextPageId());
+
+}
 
 /*****************************************************************************
  * REDISTRIBUTE
@@ -220,7 +240,23 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {}
  * Remove the first key & value pair from this page to "recipient" page.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {
+  // Assume everything is safe
+  // recipient <- me
+  // First copy the front of mine to the last of recipient
+  recipient->array_[recipient->GetSize()].first = array_[0].first;
+  recipient->array_[recipient->GetSize()].second = array_[0].second;
+
+  // Shift one slot left myself
+  for (int i = 0; i < GetSize() - 1; i++) {
+    array_[i].first = array_[i + 1].first;
+    array_[i].second = array_[i + 1].second;
+  }
+
+  // Update size of both 
+  recipient->IncreaseSize(1);
+  IncreaseSize(-1);
+}
 
 /*
  * Copy the item into the end of my item list. (Append item to my array)
@@ -232,7 +268,20 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyLastFrom(const MappingType &item) {}
  * Remove the last key & value pair from this page to "recipient" page.
  */
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient) {}
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient) {
+  // Assume everything is safe
+  // Make room for the front in recipient
+  for (auto i = recipient->GetSize(); i > 0; i--) {
+    recipient->array_[i].first = recipient->array_[i-1].first;
+    recipient->array_[i].second = recipient->array_[i-1].second;
+  }
+  // Move the last of mine to the front of recipient
+  recipient->array_[0].first = array_[GetSize() - 1].first;
+  recipient->array_[0].second = array_[GetSize() - 1].second;
+  // Update size of both pages
+  recipient->IncreaseSize(1);
+  IncreaseSize(-1);
+}
 
 /*
  * Insert item at the front of my items. Move items accordingly.

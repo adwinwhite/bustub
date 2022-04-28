@@ -90,7 +90,7 @@ class BPlusTree {
                         Transaction *transaction = nullptr);
 
   template <typename N>
-  N *Split(N *node);
+  std::pair<N*, Page*> Split(N *node);
 
 
   template <typename N>
