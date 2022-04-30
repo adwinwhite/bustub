@@ -23,6 +23,7 @@
 #include "common/logger.h"
 #include "storage/page/page.h"
 #include "storage/table/tuple.h"
+#include "buffer/buffer_pool_manager.h" 
 
 namespace bustub {
 
@@ -205,7 +206,10 @@ class Transaction {
    * Adds a page into the page set.
    * @param page page to be added
    */
-  inline void AddIntoPageSet(Page *page) { page_set_->push_back(page); }
+  inline void AddIntoPageSet(Page *page) { 
+    page->WLatch();
+    page_set_->push_back(page); 
+  }
 
   /** @return the deleted page set */
   inline std::shared_ptr<std::unordered_set<page_id_t>> GetDeletedPageSet() { return deleted_page_set_; }
@@ -245,6 +249,17 @@ class Transaction {
    * @param prev_lsn new previous lsn
    */
   inline void SetPrevLSN(lsn_t prev_lsn) { prev_lsn_ = prev_lsn; }
+
+  void ReleaseAncestors(BufferPoolManager *buf) {
+    if (page_set_->size() == 0) {
+      return;
+    }
+    for (auto p = page_set_->begin(); p + 1 != page_set_->end(); p++) {
+      (*p)->WUnlatch();
+      buf->UnpinPage((*p)->GetPageId(), false);
+      page_set_->erase(p);
+    }
+  }
 
   bool WUnlatchPage(page_id_t page_id) {
     for (auto p = page_set_->begin(); p != page_set_->end(); p++) {
