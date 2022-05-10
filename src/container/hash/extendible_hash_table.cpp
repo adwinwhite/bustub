@@ -46,22 +46,26 @@ uint32_t HASH_TABLE_TYPE::Hash(KeyType key) {
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 inline uint32_t HASH_TABLE_TYPE::KeyToDirectoryIndex(KeyType key, HashTableDirectoryPage *dir_page) {
-  return 0;
+  return Hash(key) & dir_page->GetGlobalDepthMask();
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 inline uint32_t HASH_TABLE_TYPE::KeyToPageId(KeyType key, HashTableDirectoryPage *dir_page) {
-  return 0;
+  return dir_page->GetBucketPageId(KeyToDirectoryIndex(key, dir_page));
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 HashTableDirectoryPage *HASH_TABLE_TYPE::FetchDirectoryPage() {
-  return nullptr;
+  auto dir_page = buffer_pool_manager_->FetchPage(directory_page_id_);
+  auto dir_node = reinterpret_cast<HashTableDirectoryPage *>(dir_page->GetData());
+  return dir_node;
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 HASH_TABLE_BUCKET_TYPE *HASH_TABLE_TYPE::FetchBucketPage(page_id_t bucket_page_id) {
-  return nullptr;
+  auto bucket_page = buffer_pool_manager_->FetchPage(bucket_page_id);
+  auto bucket_node = reinterpret_cast<HASH_TABLE_BUCKET_TYPE*>(bucket_page->GetData());
+  return bucket_node;
 }
 
 /*****************************************************************************
@@ -69,7 +73,13 @@ HASH_TABLE_BUCKET_TYPE *HASH_TABLE_TYPE::FetchBucketPage(page_id_t bucket_page_i
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std::vector<ValueType> *result) {
-  return false;
+  auto dir_node = FetchDirectoryPage();
+  auto bucket_page_id = KeyToPageId(key, dir_node);
+  auto bucket_node = FetchBucketPage(bucket_page_id);
+  auto has_value = bucket_node->GetValue(key, comparator_, result);
+  buffer_pool_manager_->UnpinPage(directory_page_id_, false);
+  buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+  return has_value;
 }
 
 /*****************************************************************************
@@ -77,6 +87,61 @@ bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::Insert(Transaction *transaction, const KeyType &key, const ValueType &value) {
+  auto dir_node = FetchDirectoryPage();
+  auto bucket_page_id = KeyToPageId(key, dir_node);
+  auto bucket_node = FetchBucketPage(bucket_page_id);
+  // Check whether there exists the same key-value pair.
+  std::vector<ValueType> result;
+  if (bucket_node->GetValue(key, comparator_, &result)) {
+    for (auto v = result.begin(); v != result.end(); v++) {
+      if (*v == value) {
+        buffer_pool_manager_->UnpinPage(directory_page_id_, false);
+        buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+        return false;
+      }
+    }
+  }
+
+  // Check whether the bucket is full.
+  if (bucket_node->IsFull()) {
+    // Increase global depth if necessary.
+    auto bucket_idx = KeyToDirectoryIndex(key, dir_node);
+    if (dir_node->GetLocalDepth(bucket_idx) == dir_node->GetGlobalDepth()) {
+      // Increase global depth and assign dir_index->bucket_page_id mappings
+      dir_node->IncrGlobalDepth();
+      for (int i = 0; i < (1 << (dir_node->GetGlobalDepth() - 1)); i++) {
+        dir_node->SetBucketPageId(i + (1 << (dir_node->GetGlobalDepth() - 1)), dir_node->GetBucketPageId(i));
+        dir_node->SetLocalDepth(i + (1 << (dir_node->GetGlobalDepth() - 1)), dir_node->GetLocalDepth(i));
+      }
+    } 
+
+    // Increase local depth and new a page and redistribute pairs.
+    page_id_t new_page_id0;
+    page_id_t new_page_id1;
+    auto split_page0 = buffer_pool_manager_->NewPage(&new_page_id0);
+    auto split_node0 = reinterpret_cast<HASH_TABLE_BUCKET_TYPE *>(split_page0->GetData());
+    auto split_page1 = buffer_pool_manager_->NewPage(&new_page_id1);
+    auto split_node1 = reinterpret_cast<HASH_TABLE_BUCKET_TYPE *>(split_page1->GetData());
+    // Update dir_index -> bucket_page_id mapping
+    dir_node->SetBucketPageId(bucket_idx, new_page_id0);
+    dir_node->SetBucketPageId(bucket_idx + (1 << (dir_node->GetGlobalDepth() - 1)), new_page_id1);
+    // Update local depths
+    dir_node->IncrLocalDepth(bucket_idx);
+    dir_node->IncrLocalDepth(bucket_idx + (1 << (dir_node->GetGlobalDepth() - 1)));
+    // Redistribute pairs.
+    for (uint64_t i = 0; i < BUCKET_ARRAY_SIZE; i++) {
+      if (bucket_node->IsReadable(i)) {
+        auto dir_index = KeyToDirectoryIndex(bucket_node->KetAt(i), dir_node);
+
+      }
+    }
+
+
+
+
+
+
+  }
   return false;
 }
 

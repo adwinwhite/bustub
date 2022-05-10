@@ -39,3 +39,39 @@ How to record latches acquired?
    The page set starts empty with each operation.
 
 root page id can only be changed at two mirror places.
+
+What is executor?
+
+What is tuple?
+   ([values], [columns]) serialized.
+
+How does global depth and local depths work in extendible hashing scheme?
+   global depth is the number of bits of hash used to determine unique keys. Also the number of split in directory.
+   local depths are the number of split in buckets.
+
+What does directory do?
+   Use the least number of bits to keep hashs of keys unique.
+   Store mappings: hash(with mask) -> bucket.
+
+What does bucket do?
+   Store kv.
+
+How does insertion work in extendible hashing scheme?
+   1. calculate hash of key.
+   2. use masked hash(global depth) to find corresponding bucket.
+   3. try to insert the (k, v) into bucket.
+   4. if the bucket is full, 
+         if local depth is equal to global depth,
+            increase global depth, and make additional dir_indices point to unchanged buckets.
+         if local depth is smaller than global depth which means that the bucket can split without changing global depth,
+            increase local depth thus changing mask, and new a bucket pointed by once duplicate dir_index,
+            redistribute (k, v)s into the two buckets according to the new mask, 
+            retry insertion
+      else,
+         insert the pair
+
+Do I need to redistribute kv pairs after increasing global depth since masked_key changes?
+   No need since both masked_keys pointint to the same bucket.
+
+
+

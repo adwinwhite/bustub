@@ -47,6 +47,9 @@ bool BPLUSTREE_TYPE::IsEmpty() const {
 INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) {
   if (IsEmpty()) {
+    // According to catalog test, we should return empty rid as result.
+    ValueType value;
+    result->push_back(value);
     return false;
   }
 

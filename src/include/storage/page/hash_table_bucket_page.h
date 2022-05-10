@@ -138,9 +138,13 @@ class HashTableBucketPage {
   void PrintBucket();
 
  private:
+  void RemoveOccupied(uint32_t bucket_idx);
+  void RemoveReadable(uint32_t bucket_idx);
   //  For more on BUCKET_ARRAY_SIZE see storage/page/hash_table_page_defs.h
   char occupied_[(BUCKET_ARRAY_SIZE - 1) / 8 + 1];
   // 0 if tombstone/brand new (never occupied), 1 otherwise.
+  // At which order we use bits?
+  // Why occupied_ != readable_ ?
   char readable_[(BUCKET_ARRAY_SIZE - 1) / 8 + 1];
   MappingType array_[0];
 };
