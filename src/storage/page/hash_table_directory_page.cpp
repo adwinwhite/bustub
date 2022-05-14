@@ -43,22 +43,56 @@ void HashTableDirectoryPage::DecrGlobalDepth() { global_depth_--; }
 page_id_t HashTableDirectoryPage::GetBucketPageId(uint32_t bucket_idx) {
   // Should I check size?
   // return value should be an optional
-  if (bucket_idx + 1 > Size()) {
-    return 0;
-  }
+  // if (bucket_idx + 1 > Size()) {
+    // return 0;
+  // }
   return bucket_page_ids_[bucket_idx];
 }
 
-void HashTableDirectoryPage::SetBucketPageId(uint32_t bucket_idx, page_id_t bucket_page_id) {}
+
+void HashTableDirectoryPage::SetBucketPageId(uint32_t bucket_idx, page_id_t bucket_page_id) {
+  bucket_page_ids_[bucket_idx] = bucket_page_id;
+}
+
+uint32_t HashTableDirectoryPage::GetSplitImageIndex(uint32_t bucket_idx) {
+  uint32_t split_image_idx;
+  if (bucket_idx >= (1 << (GetLocalDepth(bucket_idx) - 1))) {
+    // split image is on the left
+    split_image_idx = bucket_idx - (1 << (GetLocalDepth(bucket_idx) - 1));
+  } else {
+    split_image_idx = bucket_idx + (1 << (GetLocalDepth(bucket_idx) - 1));
+  }
+  return split_image_idx;
+}
 
 uint32_t HashTableDirectoryPage::Size() { 
   // What is size here?
   // How many buckets are used?
   // Or sum of local_depths_?
-  return 0; 
+  //
+  // The number of unique buckets.
+  uint32_t count = 0;
+  for (int i = 0; i < (1 << GetGlobalDepth()); i++) {
+    // if both split images have the same page id, only add 1.
+    if (GetLocalDepth(i) != 0) {
+      if (GetBucketPageId(i) == GetBucketPageId(GetSplitImageIndex(i))) {
+        count += 1;
+      } else {
+        count += 2;
+      }
+    }
+  }
+  return count / 2; 
 }
 
-bool HashTableDirectoryPage::CanShrink() { return false; }
+bool HashTableDirectoryPage::CanShrink() {
+  for (int i = 0; i < (1 << GetGlobalDepth()); i++) {
+    if (GetLocalDepth(i) == GetGlobalDepth()) {
+      return false;
+    }
+  }
+  return true;
+}
 
 
 void HashTableDirectoryPage::SetLocalDepth(uint32_t bucket_idx, uint8_t local_depth) {

@@ -91,19 +91,19 @@ bool HASH_TABLE_TYPE::Insert(Transaction *transaction, const KeyType &key, const
   auto bucket_page_id = KeyToPageId(key, dir_node);
   auto bucket_node = FetchBucketPage(bucket_page_id);
   // Check whether there exists the same key-value pair.
-  std::vector<ValueType> result;
-  if (bucket_node->GetValue(key, comparator_, &result)) {
-    for (auto v = result.begin(); v != result.end(); v++) {
-      if (*v == value) {
-        buffer_pool_manager_->UnpinPage(directory_page_id_, false);
-        buffer_pool_manager_->UnpinPage(bucket_page_id, false);
-        return false;
-      }
-    }
-  }
+  // std::vector<ValueType> result;
+  // if (bucket_node->GetValue(key, comparator_, &result)) {
+    // for (auto v = result.begin(); v != result.end(); v++) {
+      // if (*v == value) {
+        // buffer_pool_manager_->UnpinPage(directory_page_id_, false);
+        // buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+        // return false;
+      // }
+    // }
+  // }
 
   // Check whether the bucket is full.
-  if (bucket_node->IsFull()) {
+  while (bucket_node->IsFull()) {
     // Increase global depth if necessary.
     auto bucket_idx = KeyToDirectoryIndex(key, dir_node);
     if (dir_node->GetLocalDepth(bucket_idx) == dir_node->GetGlobalDepth()) {
@@ -131,19 +131,30 @@ bool HASH_TABLE_TYPE::Insert(Transaction *transaction, const KeyType &key, const
     // Redistribute pairs.
     for (uint64_t i = 0; i < BUCKET_ARRAY_SIZE; i++) {
       if (bucket_node->IsReadable(i)) {
-        auto dir_index = KeyToDirectoryIndex(bucket_node->KetAt(i), dir_node);
-
+        auto new_bucket_idx = KeyToDirectoryIndex(bucket_node->KeyAt(i), dir_node);
+        if (dir_node->GetBucketPageId(new_bucket_idx) == new_page_id0) {
+          split_node0->Insert(bucket_node->KeyAt(i), bucket_node->ValueAt(i), comparator_);
+        } else {
+          split_node1->Insert(bucket_node->KeyAt(i), bucket_node->ValueAt(i), comparator_);
+        }
       }
     }
-
-
-
-
-
-
+    // Release pages and delete old page
+    buffer_pool_manager_->UnpinPage(new_page_id0, true);
+    buffer_pool_manager_->UnpinPage(new_page_id1, true);
+    buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+    buffer_pool_manager_->DeletePage(bucket_page_id);
+    bucket_page_id = KeyToPageId(key, dir_node);
+    bucket_node = FetchBucketPage(bucket_page_id);
   }
-  return false;
+
+  // Now bucket_node is not full
+  auto success = bucket_node->Insert(key, value, comparator_);
+  buffer_pool_manager_->UnpinPage(directory_page_id_, true);
+  buffer_pool_manager_->UnpinPage(bucket_page_id, true);
+  return success;
 }
+
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::SplitInsert(Transaction *transaction, const KeyType &key, const ValueType &value) {
@@ -155,7 +166,53 @@ bool HASH_TABLE_TYPE::SplitInsert(Transaction *transaction, const KeyType &key, 
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::Remove(Transaction *transaction, const KeyType &key, const ValueType &value) {
-  return false;
+  auto dir_node = FetchDirectoryPage();
+  auto bucket_page_id = KeyToPageId(key, dir_node);
+  auto bucket_node = FetchBucketPage(bucket_page_id);
+  auto success = bucket_node->Remove(key, value, comparator_);
+
+  // Try to merge if empty
+  bool delete_page = false;
+  if (bucket_node->IsEmpty()) {
+    // How to find its split image? By local depth.
+    // Left: bucket_idx < 2^(d-1)
+    // Right: bucket_idx >= 2^(d-1)
+    auto bucket_idx = KeyToDirectoryIndex(key, dir_node);
+    if (dir_node->GetLocalDepth(bucket_idx) > 0) {
+      auto split_image_idx = dir_node->GetSplitImageIndex(bucket_idx);
+      // auto split_image_bucket = FetchBucketPage(dir_node->GetBucketPageId(split_image_idx));
+
+      // If both have the same local depths, then merge.
+      // Move bucket to left index and decrease local depth
+      if (dir_node->GetLocalDepth(bucket_idx) == dir_node->GetLocalDepth(split_image_idx)) {
+        auto left_split_image_idx = bucket_idx;
+        auto right_split_image_idx = split_image_idx;
+        if (bucket_idx >= (1 << (dir_node->GetLocalDepth(bucket_idx) - 1))) {
+          left_split_image_idx = split_image_idx;
+          right_split_image_idx = bucket_idx;
+        }
+        dir_node->SetBucketPageId(left_split_image_idx, dir_node->GetBucketPageId(left_split_image_idx));
+        dir_node->DecrLocalDepth(left_split_image_idx);
+        dir_node->SetLocalDepth(right_split_image_idx, 0);
+
+        // Delete page
+        delete_page = true;
+        
+        // Check if we can shrink global depth.
+        if (dir_node->CanShrink()) {
+          dir_node->DecrGlobalDepth();
+        }
+      }
+
+    }
+
+  }
+  buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+  if (delete_page) {
+    buffer_pool_manager_->DeletePage(bucket_page_id);
+  }
+  buffer_pool_manager_->UnpinPage(directory_page_id_, delete_page);
+  return success;
 }
 
 /*****************************************************************************

@@ -74,4 +74,7 @@ Do I need to redistribute kv pairs after increasing global depth since masked_ke
    No need since both masked_keys pointint to the same bucket.
 
 
+Flags in bucket page?
+   occupied - once has value. 
+   readable - not be removed.
 

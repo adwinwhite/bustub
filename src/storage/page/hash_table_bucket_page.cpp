@@ -35,11 +35,11 @@ bool HASH_TABLE_BUCKET_TYPE::GetValue(KeyType key, KeyComparator cmp, std::vecto
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_BUCKET_TYPE::Insert(KeyType key, ValueType value, KeyComparator cmp) {
-  // Check duplicate key
+  // Check duplicate key-value pair
   for (uint64_t i = 0; i < BUCKET_ARRAY_SIZE; i++) {
     if (IsReadable(i)) {
       // Duplicate key exists
-      if (cmp(KeyAt(i), key) == 0) {
+      if (cmp(KeyAt(i), key) == 0 && ValueAt(i) == value) {
         return false;
       }
     }
@@ -77,7 +77,7 @@ bool HASH_TABLE_BUCKET_TYPE::Remove(KeyType key, ValueType value, KeyComparator 
     if (IsReadable(i)) {
       if (cmp(KeyAt(i), key) == 0 && ValueAt(i) == value) {
         RemoveReadable(i);
-        RemoveOccupied(i);
+        // RemoveOccupied(i);
         return true;
       }
     }
