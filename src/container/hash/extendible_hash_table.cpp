@@ -73,12 +73,17 @@ HASH_TABLE_BUCKET_TYPE *HASH_TABLE_TYPE::FetchBucketPage(page_id_t bucket_page_i
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std::vector<ValueType> *result) {
+  table_latch_.RLock();
   auto dir_node = FetchDirectoryPage();
   auto bucket_page_id = KeyToPageId(key, dir_node);
-  auto bucket_node = FetchBucketPage(bucket_page_id);
+  auto bucket_page = buffer_pool_manager_->FetchPage(bucket_page_id);
+  bucket_page->RLatch();
+  auto bucket_node = reinterpret_cast<HASH_TABLE_BUCKET_TYPE*>(bucket_page->GetData());
   auto has_value = bucket_node->GetValue(key, comparator_, result);
   buffer_pool_manager_->UnpinPage(directory_page_id_, false);
+  bucket_page->RUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_id, false);
+  table_latch_.RUnlock();
   return has_value;
 }
 
@@ -87,23 +92,17 @@ bool HASH_TABLE_TYPE::GetValue(Transaction *transaction, const KeyType &key, std
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::Insert(Transaction *transaction, const KeyType &key, const ValueType &value) {
+  table_latch_.RLock();
   auto dir_node = FetchDirectoryPage();
   auto bucket_page_id = KeyToPageId(key, dir_node);
-  auto bucket_node = FetchBucketPage(bucket_page_id);
-  // Check whether there exists the same key-value pair.
-  // std::vector<ValueType> result;
-  // if (bucket_node->GetValue(key, comparator_, &result)) {
-    // for (auto v = result.begin(); v != result.end(); v++) {
-      // if (*v == value) {
-        // buffer_pool_manager_->UnpinPage(directory_page_id_, false);
-        // buffer_pool_manager_->UnpinPage(bucket_page_id, false);
-        // return false;
-      // }
-    // }
-  // }
+  auto bucket_page = buffer_pool_manager_->FetchPage(bucket_page_id);
+  bucket_page->WLatch();
+  auto bucket_node = reinterpret_cast<HASH_TABLE_BUCKET_TYPE*>(bucket_page->GetData());
 
+  table_latch_.RUnlock();
   // Check whether the bucket is full.
   while (bucket_node->IsFull()) {
+    table_latch_.WLock();
     // Increase global depth if necessary.
     auto bucket_idx = KeyToDirectoryIndex(key, dir_node);
     if (dir_node->GetLocalDepth(bucket_idx) == dir_node->GetGlobalDepth()) {
@@ -142,15 +141,20 @@ bool HASH_TABLE_TYPE::Insert(Transaction *transaction, const KeyType &key, const
     // Release pages and delete old page
     buffer_pool_manager_->UnpinPage(new_page_id0, true);
     buffer_pool_manager_->UnpinPage(new_page_id1, true);
+    bucket_page->WUnlatch();
     buffer_pool_manager_->UnpinPage(bucket_page_id, false);
     buffer_pool_manager_->DeletePage(bucket_page_id);
     bucket_page_id = KeyToPageId(key, dir_node);
-    bucket_node = FetchBucketPage(bucket_page_id);
+    bucket_page = buffer_pool_manager_->FetchPage(bucket_page_id);
+    bucket_page->WLatch();
+    bucket_node = reinterpret_cast<HASH_TABLE_BUCKET_TYPE*>(bucket_page->GetData());
+    table_latch_.WUnlock();
   }
 
   // Now bucket_node is not full
   auto success = bucket_node->Insert(key, value, comparator_);
   buffer_pool_manager_->UnpinPage(directory_page_id_, true);
+  bucket_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_id, true);
   return success;
 }
@@ -166,14 +170,19 @@ bool HASH_TABLE_TYPE::SplitInsert(Transaction *transaction, const KeyType &key, 
  *****************************************************************************/
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_TYPE::Remove(Transaction *transaction, const KeyType &key, const ValueType &value) {
+  table_latch_.RLock();
   auto dir_node = FetchDirectoryPage();
   auto bucket_page_id = KeyToPageId(key, dir_node);
-  auto bucket_node = FetchBucketPage(bucket_page_id);
+  auto bucket_page = buffer_pool_manager_->FetchPage(bucket_page_id);
+  bucket_page->WLatch();
+  auto bucket_node = reinterpret_cast<HASH_TABLE_BUCKET_TYPE*>(bucket_page->GetData());
   auto success = bucket_node->Remove(key, value, comparator_);
 
+  table_latch_.RUnlock();
   // Try to merge if empty
   bool delete_page = false;
   if (bucket_node->IsEmpty()) {
+    table_latch_.WLock();
     // How to find its split image? By local depth.
     // Left: bucket_idx < 2^(d-1)
     // Right: bucket_idx >= 2^(d-1)
@@ -205,8 +214,9 @@ bool HASH_TABLE_TYPE::Remove(Transaction *transaction, const KeyType &key, const
       }
 
     }
-
+    table_latch_.WUnlock();
   }
+  bucket_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(bucket_page_id, false);
   if (delete_page) {
     buffer_pool_manager_->DeletePage(bucket_page_id);
