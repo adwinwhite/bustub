@@ -27,6 +27,13 @@ HASH_TABLE_TYPE::ExtendibleHashTable(const std::string &name, BufferPoolManager 
                                      const KeyComparator &comparator, HashFunction<KeyType> hash_fn)
     : buffer_pool_manager_(buffer_pool_manager), comparator_(comparator), hash_fn_(std::move(hash_fn)) {
   //  implement me!
+  //  Initialize directory page.
+  table_latch_.WLock();
+  auto dir_page = buffer_pool_manager_->NewPage(&directory_page_id_);
+  auto dir_node = reinterpret_cast<HashTableDirectoryPage *>(dir_page->GetData());
+  dir_node->SetPageId(directory_page_id_);
+  buffer_pool_manager_->UnpinPage(directory_page_id_, true);
+  table_latch_.WUnlock();
 }
 
 /*****************************************************************************

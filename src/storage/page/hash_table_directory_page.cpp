@@ -30,7 +30,7 @@ uint32_t HashTableDirectoryPage::GetGlobalDepthMask() {
   return (1 << GetGlobalDepth()) - 1;
 }
 
-uint32_t HashTableDirectoryPage::GetLocalDepth(uint32_t bucket_idx) { return 0; }
+uint32_t HashTableDirectoryPage::GetLocalDepth(uint32_t bucket_idx) { return local_depths_[bucket_idx]; }
 
 uint32_t HashTableDirectoryPage::GetLocalDepthMask(uint32_t bucket_idx) {
   return (1 << GetLocalDepth(bucket_idx)) - 1;

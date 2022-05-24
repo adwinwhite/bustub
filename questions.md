@@ -43,7 +43,7 @@ root page id can only be changed at two mirror places.
 What is executor?
 
 What is tuple?
-   ([values], [columns]) serialized.
+   ([value], [column]) serialized.
 
 How does global depth and local depths work in extendible hashing scheme?
    global depth is the number of bits of hash used to determine unique keys. Also the number of split in directory.
@@ -77,4 +77,34 @@ Do I need to redistribute kv pairs after increasing global depth since masked_ke
 Flags in bucket page?
    occupied - once has value. 
    readable - not be removed.
+
+How does hash join work?
+   Use index to avoid iteration.
+   First build outer hash map: common_attribute -> tuple
+   Then build inner one.
+   But how to compare more specifically?
+      How to handle collision?
+   Attempt 1:
+      Set up attribute -> tuple for left table in Init()
+      Use the attribute as key to find value in hash table above.
+      How to handle repeated attribute in one table?
+         Use multimap
+            How to deal with half used iterators for same keys?
+            Keep track of all iterators?
+               Store them in another map?
+                  rid -> iterator
+      How to combine two rows?
+         I forgot to merge too in nested loop join!
+         Should I implement it by myself?
+   What is LeftJoinKey and RightJoinKey?
+      Tuple -> attribute
+
+
+Why do I need hash or sort in aggregation?
+   Group-by should be column. Why `Value`?
+      or vec<vec<value>> may also work.
+   `term` might be aggregation function type.
+   `aggregates` in plan node are expressions specifying columns used by aggregation.
+   `aggregation_types` in plan node specify aggregation operation type with respect to columns above.
+   `term_idx` specified aggregation function type or group-by column depending on whether is_group_by_term is true.
 
