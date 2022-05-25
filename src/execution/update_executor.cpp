@@ -24,20 +24,23 @@ UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *
 
 void UpdateExecutor::Init() {
   table_info_ = GetExecutorContext()->GetCatalog()->GetTable(plan_->TableOid());
+  if (child_executor_ != nullptr) {
+    child_executor_->Init();
+  }
 }
 
 bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   // Get inserted value from child
+  // We shouldn't return anything according to test.
   Tuple tu{};
   RID ri{};
-  if (child_executor_->Next(&tu, &ri)) {
+  while (child_executor_->Next(&tu, &ri)) {
     auto modified_tuple = GenerateUpdatedTuple(tu);
     table_info_->table_->UpdateTuple(modified_tuple, ri, GetExecutorContext()->GetTransaction());
     for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_)) {
       idx->index_->DeleteEntry(tu, ri, GetExecutorContext()->GetTransaction());
       idx->index_->InsertEntry(modified_tuple, ri, GetExecutorContext()->GetTransaction());
     }
-    return true;
   }   
   return false;
 }

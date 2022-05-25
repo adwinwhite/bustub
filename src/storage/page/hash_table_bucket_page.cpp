@@ -62,6 +62,7 @@ bool HASH_TABLE_BUCKET_TYPE::Insert(KeyType key, ValueType value, KeyComparator 
   }
   // Will never reach here
   // Should panic
+  LOG_ERROR("all bucket slots are occupied");
   exit(-1);
 }
 
@@ -77,6 +78,8 @@ bool HASH_TABLE_BUCKET_TYPE::Remove(KeyType key, ValueType value, KeyComparator 
     if (IsReadable(i)) {
       if (cmp(KeyAt(i), key) == 0 && ValueAt(i) == value) {
         RemoveReadable(i);
+        // Why don't we remove occupied_?
+        // What's the difference between occupied_ and readable_ anyway?
         // RemoveOccupied(i);
         return true;
       }
@@ -153,8 +156,14 @@ void HASH_TABLE_BUCKET_TYPE::RemoveReadable(uint32_t bucket_idx) {
 template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_BUCKET_TYPE::IsFull() {
   // Check every bit
-  for (const auto &byte : occupied_) {
-    if (byte != (1 << 8) - 1) {
+  // Not all bits are valid. Some bits are irrelevant.
+  for (uint32_t i = 0; i < (BUCKET_ARRAY_SIZE - 1) / 8; i++) {
+    if (static_cast<uint8_t>(occupied_[i]) != (1 << 8) - 1) {
+      return false;
+    }
+  }
+  for (uint32_t i = 0; i < BUCKET_ARRAY_SIZE % 8; i++) {
+    if (!IsOccupied(BUCKET_ARRAY_SIZE - (BUCKET_ARRAY_SIZE % 8) + i)) {
       return false;
     }
   }
@@ -165,11 +174,17 @@ template <typename KeyType, typename ValueType, typename KeyComparator>
 uint32_t HASH_TABLE_BUCKET_TYPE::NumReadable() {
   // Scan all bits
   uint32_t count = 0;
-  for (const auto &byte : readable_) {
-    for (auto i = 0; i < 8; i++) {
-      if (byte & (1 << i)) {
+  // Not all bits are valid. Some bits are irrelevant.
+  for (uint32_t i = 0; i < (BUCKET_ARRAY_SIZE - 1) / 8; i++) {
+    for (auto j = 0; j < 8; j++) {
+      if (readable_[j] & (1 << j)) {
         count++;
       }
+    }
+  }
+  for (uint32_t i = 0; i < BUCKET_ARRAY_SIZE % 8; i++) {
+    if (IsReadable(BUCKET_ARRAY_SIZE - (BUCKET_ARRAY_SIZE % 8) + i)) {
+      count++;
     }
   }
   return count;
@@ -179,7 +194,7 @@ template <typename KeyType, typename ValueType, typename KeyComparator>
 bool HASH_TABLE_BUCKET_TYPE::IsEmpty() {
   // Check every bit
   for (const auto &byte : occupied_) {
-    if (byte != 0) {
+    if (static_cast<uint8_t>(byte) != 0) {
       return false;
     }
   }

@@ -23,19 +23,23 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
   child_executor_ = std::move(child_executor);
 }
 
-void DeleteExecutor::Init() {}
+void DeleteExecutor::Init() {
+  if (child_executor_ != nullptr) {
+    child_executor_->Init();
+  }
+}
 
 bool DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) { 
   // Get inserted value from child
   auto table_info_ = GetExecutorContext()->GetCatalog()->GetTable(plan_->TableOid());
   Tuple tu{};
   RID ri{};
-  if (child_executor_->Next(&tu, &ri)) {
+  while (child_executor_->Next(&tu, &ri)) {
     table_info_->table_->MarkDelete(ri, GetExecutorContext()->GetTransaction());
     for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_)) {
       idx->index_->DeleteEntry(tu, ri, GetExecutorContext()->GetTransaction());
     }
-    return true;
+    // return true;
   }   
   return false;
 }

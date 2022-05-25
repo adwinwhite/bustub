@@ -108,3 +108,10 @@ Why do I need hash or sort in aggregation?
    `aggregation_types` in plan node specify aggregation operation type with respect to columns above.
    `term_idx` specified aggregation function type or group-by column depending on whether is_group_by_term is true.
 
+
+Why do we never recycle occupied bits in hash_table_bucket_page?
+
+
+Tuple's length(16) is larger than KeySize(8) which results in wrong memcpy.
+
+The root cause is that I didn't filter output_tuple in seq_scan_executor according to output_scheme which makes the output_tuple contains more columns than needed.
