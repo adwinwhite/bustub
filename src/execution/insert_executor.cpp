@@ -46,7 +46,7 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
       RID ri{};
       table_info->table_->InsertTuple(tu, &ri, GetExecutorContext()->GetTransaction());
       for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info->name_)) {
-        idx->index_->InsertEntry(tu, ri, GetExecutorContext()->GetTransaction());
+        idx->index_->InsertEntry(TransformTuple(&table_info->schema_, &tu, idx->index_->GetKeySchema()), ri, GetExecutorContext()->GetTransaction());
       }
       raw_idx_++;
       return true;
@@ -60,7 +60,7 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
     if (child_executor_->Next(&tu, &ri)) {
       table_info->table_->InsertTuple(tu, &ri, GetExecutorContext()->GetTransaction());
       for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info->name_)) {
-        idx->index_->InsertEntry(tu, ri, GetExecutorContext()->GetTransaction());
+        idx->index_->InsertEntry(TransformTuple(&table_info->schema_, &tu, idx->index_->GetKeySchema()), ri, GetExecutorContext()->GetTransaction());
       }
       return true;
     } else {

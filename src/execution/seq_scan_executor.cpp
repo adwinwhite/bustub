@@ -29,8 +29,9 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
   // What value can we get? Tuple.
   // How to get rid? Tuple contains rid.
   while (*table_ite_ != table_info_->table_->End()) {
-    *tuple = **table_ite_;
-    *rid = tuple->GetRid();
+    auto old_tuple = **table_ite_;
+    *rid = old_tuple.GetRid();
+    *tuple = TransformTuple(&table_info_->schema_, &old_tuple, GetOutputSchema());
     (*table_ite_)++;
     if (plan_->GetPredicate()) {
       if (plan_->GetPredicate()->Evaluate(tuple, GetOutputSchema()).GetAs<bool>()) {

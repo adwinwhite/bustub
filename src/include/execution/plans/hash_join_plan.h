@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "execution/expressions/abstract_expression.h"
 #include "execution/plans/abstract_plan.h"
 
 namespace bustub {

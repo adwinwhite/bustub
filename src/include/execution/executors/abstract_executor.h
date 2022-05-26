@@ -53,6 +53,14 @@ class AbstractExecutor {
   ExecutorContext *GetExecutorContext() { return exec_ctx_; }
 
  protected:
+  Tuple TransformTuple(const Schema *old_schema, const Tuple *old_tuple, const Schema *new_schema) {
+    // We assume that new schema is a subset of old schema.
+    std::vector<Value> values;
+    for (const auto &col : new_schema->GetColumns()) {
+      values.push_back(old_tuple->GetValue(old_schema, old_schema->GetColIdx(col.GetName())));
+    }
+    return Tuple{values, new_schema};
+  }
   /** The executor context in which the executor runs */
   ExecutorContext *exec_ctx_;
 };

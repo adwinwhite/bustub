@@ -24,6 +24,10 @@ NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const 
 }
 
 void NestedLoopJoinExecutor::Init() {
+  // Reset state.
+  // Initialize children.
+  left_executor_->Init();
+  right_executor_->Init();
 }
 
 bool NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) { 

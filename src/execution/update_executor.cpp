@@ -38,8 +38,8 @@ bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
     auto modified_tuple = GenerateUpdatedTuple(tu);
     table_info_->table_->UpdateTuple(modified_tuple, ri, GetExecutorContext()->GetTransaction());
     for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_)) {
-      idx->index_->DeleteEntry(tu, ri, GetExecutorContext()->GetTransaction());
-      idx->index_->InsertEntry(modified_tuple, ri, GetExecutorContext()->GetTransaction());
+      idx->index_->DeleteEntry(TransformTuple(&table_info_->schema_, &tu, idx->index_->GetKeySchema()), ri, GetExecutorContext()->GetTransaction());
+      idx->index_->InsertEntry(TransformTuple(&table_info_->schema_, &modified_tuple, idx->index_->GetKeySchema()), ri, GetExecutorContext()->GetTransaction());
     }
   }   
   return false;

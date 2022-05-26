@@ -37,7 +37,7 @@ bool DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   while (child_executor_->Next(&tu, &ri)) {
     table_info_->table_->MarkDelete(ri, GetExecutorContext()->GetTransaction());
     for (auto idx : GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_)) {
-      idx->index_->DeleteEntry(tu, ri, GetExecutorContext()->GetTransaction());
+      idx->index_->DeleteEntry(TransformTuple(&table_info_->schema_, &tu, idx->index_->GetKeySchema()), ri, GetExecutorContext()->GetTransaction());
     }
     // return true;
   }   
