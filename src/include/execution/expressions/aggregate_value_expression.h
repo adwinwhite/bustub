@@ -35,7 +35,14 @@ class AggregateValueExpression : public AbstractExpression {
 
   /** Invalid operation for `AggregateValueExpression` */
   Value Evaluate(const Tuple *tuple, const Schema *schema) const override {
-    UNREACHABLE("Aggregation should only refer to group-by and aggregates.");
+    // UNREACHABLE("Aggregation should only refer to group-by and aggregates.");
+    for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
+      auto col_expr = reinterpret_cast<const AggregateValueExpression*>(schema->GetColumn(i).GetExpr());
+      if (col_expr->is_group_by_term_ == is_group_by_term_ && col_expr->term_idx_ == term_idx_) {
+        return tuple->GetValue(schema, i);
+      }
+    }
+    UNREACHABLE("there must be value returned");
   }
 
   /** Invalid operation for `AggregateValueExpression` */

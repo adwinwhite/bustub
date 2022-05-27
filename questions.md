@@ -115,3 +115,8 @@ Why do we never recycle occupied bits in hash_table_bucket_page?
 Tuple's length(16) is larger than KeySize(8) which results in wrong memcpy.
 
 The root cause is that I didn't filter output_tuple in seq_scan_executor according to output_scheme which makes the output_tuple contains more columns than needed.
+
+How to adjust output aggregation tuple according to schema?
+   Just assume the order is the same.
+   And insert group_by_col at proper position.
+   Oh. EvaluateAggregate() can be used to extract proper value.
