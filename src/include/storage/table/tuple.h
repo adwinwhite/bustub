@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "common/util/hash_util.h"
 #include "catalog/schema.h"
 #include "common/rid.h"
 #include "type/value.h"
@@ -97,3 +98,28 @@ class Tuple {
 };
 
 }  // namespace bustub
+//
+namespace std {
+template <>
+struct std::hash<bustub::Tuple> {
+  size_t operator()(const bustub::Tuple &tuple) const {
+    return bustub::HashUtil::HashBytes(tuple.GetData(), tuple.GetLength());
+  }
+};
+
+template <>
+struct std::equal_to<bustub::Tuple> {
+  constexpr bool operator()( const bustub::Tuple& lhs, const bustub::Tuple& rhs ) const {
+    if (lhs.GetLength() != rhs.GetLength()) {
+      return false;
+    }
+    for (uint32_t i = 0; i < lhs.GetLength(); i++) {
+      if (lhs.GetData()[i] != rhs.GetData()[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+}
