@@ -105,6 +105,7 @@ class LockManager {
   bool Unlock(Transaction *txn, const RID &rid);
 
  private:
+  bool ExistExclusive(const RID &rid);
   std::mutex latch_;
 
   /** Lock table for lock requests. */

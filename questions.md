@@ -120,3 +120,31 @@ How to adjust output aggregation tuple according to schema?
    Just assume the order is the same.
    And insert group_by_col at proper position.
    Oh. EvaluateAggregate() can be used to extract proper value.
+
+How to avoid deadlock in 2-phase locking?
+
+What does lock manager do?
+   Record tuples are locked by who(txns).
+   Grant access or deny.
+
+What is read uncommited?
+   Able to read other txns' writes even if they haven't been commited.
+      But how to read?
+         Iterate all txns' write set?
+   Can txn write even if another is reading?
+
+How does transaction manager rollback write operations?
+   Just perform reverse operations in Abort().
+
+How does txns with different isolation levels interact?
+   Respect the highest isolation level.
+
+Do I need to make the lock manager fair?
+
+What's the difference between repeated read and snapshot isolation?
+   Repeated read is a property of snapshot isolation.
+
+What's strict 2 phase locking?
+   Only release locks when committing.
+   No cascading aborts.
+   Might reduce concurrency.
